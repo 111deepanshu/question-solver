@@ -3,13 +3,318 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Upload PDF</title>
+    <title>Advanced Question Solver</title>
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            text-align: center;
+        }
+        .hidden {
+            display: none;
+        }
+        #imageContainer {
+            margin-top: 20px;
+            position: relative;
+        }
+        .question-image {
+            max-width: 100%;
+            margin-bottom: 10px;
+        }
+        .loading {
+            text-align: center;
+            margin-top: 20px;
+        }
+        #timer {
+            font-size: 24px;
+            margin: 20px 0;
+        }
+        .navigation {
+            margin-top: 20px;
+        }
+        .nav-button {
+            padding: 10px 20px;
+            margin: 0 10px;
+        }
+        .completed-indicator {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background-color: green;
+            color: white;
+            padding: 5px 10px;
+            border-radius: 5px;
+        }
+        #chartContainer {
+            width: 300px;
+            height: 300px;
+            margin: 20px auto;
+        }
+        #timeSummary {
+            margin-top: 20px;
+        }
+    </style>
 </head>
 <body>
-    <h1>Upload a PDF</h1>
-    <form action="/upload" method="POST" enctype="multipart/form-data">
-        <input type="file" name="file" accept="application/pdf">
-        <button type="submit">Upload</button>
-    </form>
+    <h1>Advanced Question Solver</h1>
+    <div id="uploadSection">
+        <input type="file" id="pdfFile" accept="application/pdf">
+        <button onclick="uploadPDF()">Upload</button>
+    </div>
+
+    <div id="loadingIndicator" class="hidden">
+        <p>Processing PDF, please wait...</p>
+    </div>
+
+    <div id="questionSection" class="hidden">
+        <div id="timer">00:00:00</div>
+        <div id="imageContainer"></div>
+        <div class="navigation">
+            <button onclick="previousQuestion()" class="nav-button" id="prevButton" disabled>Previous</button>
+            <button onclick="nextQuestion()" class="nav-button" id="nextButton">Next</button>
+        </div>
+        <div>Question <span id="currentQuestionNumber"></span> of <span id="totalQuestions"></span></div>
+        <button onclick="toggleTimer()" id="timerButton">Start Timer</button>
+        <button onclick="toggleCompleted()" id="completeButton">Mark as Completed</button>
+    </div>
+
+    <button onclick="submitAnswers()" class="hidden" id="submitButton">Submit Answers</button>
+
+    <div id="chartContainer" class="hidden">
+        <canvas id="completionChart"></canvas>
+    </div>
+
+    <div id="timeSummary" class="hidden"></div>
+
+    <script>
+        let images = [];
+        let currentImageIndex = 0;
+        let completedQuestions = new Set();
+        let timerInterval;
+        let startTime;
+        let isTimerRunning = false;
+        let chart;
+        let questionTimes = {};
+        let currentQuestionStartTime;
+
+        function saveProgress() {
+            const progress = {
+                images,
+                currentImageIndex,
+                completedQuestions: Array.from(completedQuestions),
+                questionTimes,
+                totalTime: document.getElementById('timer').textContent
+            };
+            localStorage.setItem('questionSolverProgress', JSON.stringify(progress));
+        }
+
+        function loadProgress() {
+            const savedProgress = localStorage.getItem('questionSolverProgress');
+            if (savedProgress) {
+                const progress = JSON.parse(savedProgress);
+                images = progress.images;
+                currentImageIndex = progress.currentImageIndex;
+                completedQuestions = new Set(progress.completedQuestions);
+                questionTimes = progress.questionTimes;
+                document.getElementById('timer').textContent = progress.totalTime;
+                
+                document.getElementById('questionSection').classList.remove('hidden');
+                document.getElementById('submitButton').classList.remove('hidden');
+                document.getElementById('totalQuestions').textContent = images.length;
+                displayCurrentImage();
+                
+                return true;
+            }
+            return false;
+        }
+
+        async function uploadPDF() {
+            if (loadProgress()) {
+                return;
+            }
+
+            const fileInput = document.getElementById('pdfFile');
+            const formData = new FormData();
+            formData.append('file', fileInput.files[0]);
+
+            try {
+                document.getElementById('loadingIndicator').classList.remove('hidden');
+                const response = await axios.post('/upload', formData);
+                images = response.data.images;
+                document.getElementById('questionSection').classList.remove('hidden');
+                document.getElementById('submitButton').classList.remove('hidden');
+                document.getElementById('totalQuestions').textContent = images.length;
+                displayCurrentImage();
+            } catch (error) {
+                console.error('Error:', error.response?.data?.error || 'An error occurred');
+                alert('Error uploading file. Please try again.');
+            } finally {
+                document.getElementById('loadingIndicator').classList.add('hidden');
+            }
+        }
+
+        function displayCurrentImage() {
+            const container = document.getElementById('imageContainer');
+            container.innerHTML = `
+                <img src="/static/output/${images[currentImageIndex]}" alt="Question ${currentImageIndex + 1}" class="question-image">
+                ${completedQuestions.has(currentImageIndex) ? '<div class="completed-indicator">Completed</div>' : ''}
+            `;
+            document.getElementById('currentQuestionNumber').textContent = currentImageIndex + 1;
+            updateNavigationButtons();
+            saveProgress();
+        }
+
+        function updateNavigationButtons() {
+            document.getElementById('prevButton').disabled = currentImageIndex === 0;
+            document.getElementById('nextButton').disabled = currentImageIndex === images.length - 1;
+        }
+
+        function previousQuestion() {
+            if (currentImageIndex > 0) {
+                updateQuestionTime();
+                currentImageIndex--;
+                displayCurrentImage();
+                currentQuestionStartTime = Date.now();
+            }
+        }
+
+        function nextQuestion() {
+            if (currentImageIndex < images.length - 1) {
+                updateQuestionTime();
+                currentImageIndex++;
+                displayCurrentImage();
+                currentQuestionStartTime = Date.now();
+            }
+        }
+
+        function toggleTimer() {
+            const timerButton = document.getElementById('timerButton');
+            if (isTimerRunning) {
+                clearInterval(timerInterval);
+                timerButton.textContent = 'Start Timer';
+                updateQuestionTime();
+            } else {
+                startTime = Date.now() - (startTime ? startTime : 0);
+                timerInterval = setInterval(updateTimer, 1000);
+                timerButton.textContent = 'Pause Timer';
+                currentQuestionStartTime = Date.now();
+            }
+            isTimerRunning = !isTimerRunning;
+        }
+
+        function updateTimer() {
+            const elapsedTime = Date.now() - startTime;
+            const seconds = Math.floor((elapsedTime / 1000) % 60);
+            const minutes = Math.floor((elapsedTime / (1000 * 60)) % 60);
+            const hours = Math.floor((elapsedTime / (1000 * 60 * 60)) % 24);
+            document.getElementById('timer').textContent = 
+                `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+            saveProgress();
+        }
+
+        function updateQuestionTime() {
+            if (isTimerRunning && currentQuestionStartTime) {
+                const timeSpent = Date.now() - currentQuestionStartTime;
+                questionTimes[currentImageIndex] = (questionTimes[currentImageIndex] || 0) + timeSpent;
+                currentQuestionStartTime = Date.now();
+            }
+        }
+
+        function toggleCompleted() {
+            if (completedQuestions.has(currentImageIndex)) {
+                completedQuestions.delete(currentImageIndex);
+            } else {
+                completedQuestions.add(currentImageIndex);
+            }
+            displayCurrentImage();
+        }
+
+        async function submitAnswers() {
+            updateQuestionTime();
+            try {
+                const response = await axios.post('/submit', { 
+                    questions: Array.from(completedQuestions),
+                    times: questionTimes
+                });
+                alert(response.data.message);
+                showCompletionChart();
+                showTimeSummary();
+            } catch (error) {
+                console.error('Error:', error.response?.data?.error || 'An error occurred');
+                alert('Error submitting answers. Please try again.');
+            }
+        }
+
+        function showCompletionChart() {
+            const chartContainer = document.getElementById('chartContainer');
+            chartContainer.classList.remove('hidden');
+
+            const completedCount = completedQuestions.size;
+            const totalCount = images.length;
+            const incompleteCount = totalCount - completedCount;
+
+            const ctx = document.getElementById('completionChart').getContext('2d');
+            chart = new Chart(ctx, {
+                type: 'pie',
+                data: {
+                    labels: ['Completed', 'Incomplete'],
+                    datasets: [{
+                        data: [completedCount, incompleteCount],
+                        backgroundColor: ['#4CAF50', '#FFA500']
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    title: {
+                        display: true,
+                        text: 'Question Completion Status'
+                    }
+                }
+            });
+        }
+
+        function showTimeSummary() {
+            const timeSummaryDiv = document.getElementById('timeSummary');
+            timeSummaryDiv.classList.remove('hidden');
+            
+            let summaryHTML = '<h2>Time Summary</h2>';
+            summaryHTML += '<ul>';
+            for (let i = 0; i < images.length; i++) {
+                const timeSpent = questionTimes[i] || 0;
+                const minutes = Math.floor(timeSpent / 60000);
+                const seconds = ((timeSpent % 60000) / 1000).toFixed(0);
+                summaryHTML += `<li>Question ${i + 1}: ${minutes}m ${seconds}s</li>`;
+            }
+            summaryHTML += '</ul>';
+            
+            const totalTime = document.getElementById('timer').textContent;
+            summaryHTML += `<p>Total time: ${totalTime}</p>`;
+            
+            timeSummaryDiv.innerHTML = summaryHTML;
+        }
+
+        // Keyboard shortcuts
+        document.addEventListener('keydown', function(event) {
+            if (event.key === 'ArrowLeft') {
+                previousQuestion();
+            } else if (event.key === 'ArrowRight') {
+                nextQuestion();
+            } else if (event.key === 'c' || event.key === 'C') {
+                toggleCompleted();
+            }
+        });
+
+        // Check for saved progress on page load
+        window.onload = function() {
+            if (loadProgress()) {
+                alert('Saved progress loaded. You can continue from where you left off.');
+            }
+        };
+
+    </script>
 </body>
 </html>
