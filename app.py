@@ -1,74 +1,64 @@
 import os
 import fitz  # PyMuPDF
-from flask import Flask, render_template, request, redirect, url_for, send_from_directory
+from flask import Flask, render_template, request, jsonify, send_from_directory
 from werkzeug.utils import secure_filename
 
-# Initialize Flask app
 app = Flask(__name__)
 
-# Configuration for file uploads
-UPLOAD_FOLDER = 'uploads/'
-OUTPUT_FOLDER = 'static/output/'  # Store output images
+# Configuration
+app.config['UPLOAD_FOLDER'] = 'uploads/'
+app.config['OUTPUT_FOLDER'] = 'static/output/'
 ALLOWED_EXTENSIONS = {'pdf'}
-app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
-app.config['OUTPUT_FOLDER'] = OUTPUT_FOLDER
 
-# Create the necessary directories if they don't exist
-if not os.path.exists(UPLOAD_FOLDER):
-    os.makedirs(UPLOAD_FOLDER)
+# Create necessary directories
+os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
+os.makedirs(app.config['OUTPUT_FOLDER'], exist_ok=True)
 
-if not os.path.exists(OUTPUT_FOLDER):
-    os.makedirs(OUTPUT_FOLDER)
-
-# Function to check allowed file types
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
-# Function to convert PDF to images
 def pdf_to_images(filepath, output_folder):
-    doc = fitz.open(filepath)  # Open the uploaded PDF
+    doc = fitz.open(filepath)
     images = []
     for page_num in range(len(doc)):
-        page = doc.load_page(page_num)  # Get each page
-        pix = page.get_pixmap()  # Convert page to an image
-        output_image = os.path.join(output_folder, f"page_{page_num + 1}.png")
-        pix.save(output_image)
-        images.append(output_image)  # Append the path of the image for reference
+        page = doc.load_page(page_num)
+        pix = page.get_pixmap()
+        output_image = f"page_{page_num + 1}.png"
+        output_path = os.path.join(output_folder, output_image)
+        pix.save(output_path)
+        images.append(output_image)
     return images
 
-
-# Route for file upload page
 @app.route('/')
 def upload_file():
     return render_template('upload.html')
 
-# Route to handle file uploads
 @app.route('/upload', methods=['POST'])
 def upload():
     if 'file' not in request.files:
-        return "No file part"
+        return jsonify({"error": "No file part"}), 400
     
     file = request.files['file']
     if file.filename == '':
-        return "No selected file"
+        return jsonify({"error": "No selected file"}), 400
     
     if file and allowed_file(file.filename):
         filename = secure_filename(file.filename)
         filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
         file.save(filepath)
 
-        # Convert the PDF to images
         images = pdf_to_images(filepath, app.config['OUTPUT_FOLDER'])
-
-        return render_template('display_images.html', images=images)
+        return jsonify({"images": images}), 200
     
-    return "Invalid file type"
+    return jsonify({"error": "Invalid file type"}), 400
 
 @app.route('/submit', methods=['POST'])
 def submit():
-    completed_questions = request.form.getlist('questions')
-    # Do something with the completed questions, like store them in a database
-    return f'You completed {len(completed_questions)} questions!'
+    data = request.json
+    completed_questions = data.get('questions', [])
+    question_times = data.get('times', {})
+    # Process the data as needed
+    return jsonify({"message": f"You completed {len(completed_questions)} questions!"})
 
 if __name__ == '__main__':
     app.run(debug=True)
