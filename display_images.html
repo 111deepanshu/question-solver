@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Questions with Timers</title>
+    <style>
+        .question-container {
+            margin-bottom: 20px;
+        }
+        img {
+            max-width: 400px;  /* Resize image */
+            display: block;
+        }
+        .timer {
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Questions with Timers</h1>
+    <form action="/submit" method="POST">
+        <ul>
+        {% for image in images %}
+            <li class="question-container">
+                <img src="{{ image }}" alt="PDF Page">
+                <label>
+                    <input type="checkbox" name="questions" value="{{ image }}">
+                    Mark as done
+                </label>
+                <div class="timer">
+                    <span id="time-{{ loop.index }}">00:00</span>
+                    <button type="button" onclick="startTimer({{ loop.index }})">Start Timer</button>
+                    <button type="button" onclick="stopTimer({{ loop.index }})">Stop Timer</button>
+                </div>
+            </li>
+        {% endfor %}
+        </ul>
+        <button type="submit">Submit</button>
+    </form>
+
+    <script>
+        // Timer storage for each question
+        var timers = {};
+        var intervals = {};
+
+        // Function to start the timer
+        function startTimer(index) {
+            if (intervals[index]) return; // If timer is already running, do nothing
+
+            var startTime = Date.now();
+            var display = document.getElementById('time-' + index);
+
+            intervals[index] = setInterval(function() {
+                var elapsed = Date.now() - startTime;
+                var minutes = Math.floor(elapsed / 60000);
+                var seconds = Math.floor((elapsed % 60000) / 1000);
+                display.textContent = 
+                    (minutes < 10 ? '0' : '') + minutes + ':' + 
+                    (seconds < 10 ? '0' : '') + seconds;
+            }, 1000);
+        }
+
+        // Function to stop the timer
+        function stopTimer(index) {
+            clearInterval(intervals[index]);
+            intervals[index] = null;
+        }
+    </script>
+</body>
+</html>
