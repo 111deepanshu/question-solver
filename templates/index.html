@@ -3,11 +3,73 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Home</title>
+    <title>PDF Question Solver - Home</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            text-align: center;
+        }
+        h1 {
+            color: #2c3e50;
+        }
+        .description {
+            background-color: #f9f9f9;
+            border-radius: 5px;
+            padding: 15px;
+            margin-bottom: 20px;
+        }
+        .cta-button {
+            display: inline-block;
+            background-color: #3498db;
+            color: white;
+            padding: 10px 20px;
+            text-decoration: none;
+            border-radius: 5px;
+            transition: background-color 0.3s ease;
+        }
+        .cta-button:hover {
+            background-color: #2980b9;
+        }
+        .features {
+            display: flex;
+            justify-content: space-around;
+            margin-top: 30px;
+        }
+        .feature {
+            flex-basis: 30%;
+            padding: 10px;
+            background-color: #ecf0f1;
+            border-radius: 5px;
+        }
+    </style>
 </head>
 <body>
     <h1>Welcome to the PDF Question Solver</h1>
-    <p>Upload a PDF file to start extracting questions and timing your progress!</p>
-    <a href="/upload">Go to Upload Page</a>
+    
+    <div class="description">
+        <p>Enhance your study sessions with our PDF Question Solver. Upload your PDF, extract questions, and time your progress effortlessly!</p>
+    </div>
+    
+    <a href="/upload" class="cta-button">Start Solving Questions</a>
+    
+    <div class="features">
+        <div class="feature">
+            <h3>Upload PDFs</h3>
+            <p>Easily upload your PDF files containing questions.</p>
+        </div>
+        <div class="feature">
+            <h3>Extract Questions</h3>
+            <p>Our system automatically extracts questions from your PDFs.</p>
+        </div>
+        <div class="feature">
+            <h3>Track Progress</h3>
+            <p>Time your answers and monitor your improvement over time.</p>
+        </div>
+    </div>
 </body>
 </html>
